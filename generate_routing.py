@@ -154,7 +154,7 @@ def shortest_path_turn_model_random(ici_graph):
 					second = curr[0]
 					third = next[0]
 					if first ==sink:
-						routing_table[second][u][-1] = third
+						routing_table[second][u]["-1"] = third
 					else:
 						if first not in routing_table[second][u].keys():
 							routing_table[second][u][first] = third
