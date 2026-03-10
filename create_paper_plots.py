@@ -8,7 +8,6 @@ import matplotlib.ticker as mtick
 # RapidChiplet modules
 import helpers as hlp
 import global_config as cfg
-import run_experiment as re 
 
 def read_results(prefix, suffix, n_units):
 	data = {}
@@ -235,12 +234,13 @@ def create_case_study_plot():
 	data = []
 	# Read all files in the results directory
 	for file in os.listdir("results"):
-		if file.startswith("case_study") and file.endswith(".json"):
+		if file.startswith("results_oca_") and file.endswith(".json"):
 			results = hlp.read_json("results/%s" % file)
 			lat = results["latency"]["avg"]
 			tp = results["throughput"]["aggregate_throughput"] * 1e-3	# bits/cycle to kbits/cycle
 			area = results["area_summary"]["total_chiplet_area"] * 1e-2	# mm^2 to cm^2
-			config = file.split(".")[0].split("-")[1:]
+			config_str = file.replace("results_oca_", "").replace(".json", "")
+			config = [config_str]
 			entry = {"latency": lat, "throughput": tp, "area": area, "config": config}
 			data.append(entry)
 	print("Total number of points: %d" % len(data))
@@ -258,26 +258,124 @@ def create_case_study_plot():
 	print("Number of unique points: %d" % len(filtered_data))
 	data = filtered_data
 	# Create the plot
-	(fig, ax) = plt.subplots(1, 1, figsize=(5, 3))
-	fig.subplots_adjust(left=0.125, right=0.975, top=0.975, bottom=0.15)
-	# Plot the data
-	lats = [x["latency"] for x in data]
-	tps = [x["throughput"] for x in data]	
-	areas = [x["area"] for x in data]	
-	cmap = ax.scatter(lats, tps, c=areas, s=0.5, marker = "o", cmap = "RdYlGn_r", zorder=3).get_cmap()
-	(min_area,max_area) = (min(areas), max(areas))
+	(fig, ax) = plt.subplots(1, 1, figsize=(7.5, 4.5))
+	fig.subplots_adjust(left=0.1, right=0.6, top=0.9, bottom=0.15)
+	areas_raw = [x["area"] for x in data]
+	(min_area, max_area) = (min(areas_raw), max(areas_raw))
+	
+	areas_sorted = sorted(areas_raw)
+	vmin_area = areas_sorted[int(len(areas_sorted) * 0.05)]
+	vmax_area = areas_sorted[int(len(areas_sorted) * 0.95)]
+	norm = plt.Normalize(vmin=vmin_area, vmax=vmax_area)
+	
+	# Mapping markers to network topologies
+	topo_markers = {
+		"mesh": "o", 
+		"torus": "s", 
+		"folded_torus": "D", 
+		"sid_mesh": "v"
+	}
+	
+	import matplotlib.lines as mlines
+	legend_handles = []
+	
+	# Helper to map grid scale 'NxN' to a marker size
+	def get_size_for_grid(config_str):
+		parts = config_str.split("_")
+		if len(parts) >= 2 and 'x' in parts[-2]:
+			try:
+				n = int(parts[-2].split('x')[0])
+				# Map N=3..16 to size 10..80 roughly
+				return 10 + (n - 3) * 5
+			except:
+				pass
+		return 15
+
+	for topo_name, marker in topo_markers.items():
+		# Filter elements that have this specific topology format 
+		group_data = [x for x in data if x.get("config", [""])[0].startswith(topo_name)]
+		if not group_data:
+			continue
+			
+		lats = [x["latency"] for x in group_data]
+		tps = [x["throughput"] for x in group_data]	
+		areas = [x["area"] for x in group_data]
+		sizes = [get_size_for_grid(x.get("config", [""])[0]) for x in group_data]
+		
+		scatter_group = ax.scatter(lats, tps, c=areas, s=sizes, marker=marker, cmap="RdYlGn_r", vmin=vmin_area, vmax=vmax_area, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
+		
+		# Build a proxy artist for the legend
+		legend_handles.append(mlines.Line2D([], [], color='gray', marker=marker, linestyle='None', markersize=6, label=topo_name.replace("_", " ").title()))
+		
+		# Use the colormap of the very first scattered group as our canonical bar reference
+		cmap = scatter_group.get_cmap()
+		scatter = scatter_group
+	
+	# Plot colorbar based on the unified scale
+	cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
+	cbar.set_label('Area (normalized)', fontsize=8)
+	cbar.ax.tick_params(labelsize=7)
+	
+	# Add the secondary legend describing marker shapes
+	shape_legend = ax.legend(handles=legend_handles, title="Topologies", loc="upper left", bbox_to_anchor=(1.2, 1.0), fontsize=8, title_fontsize=9)
+	ax.add_artist(shape_legend)
+	
+	# Add the tertiary legend describing marker sizes
+	size_handles = []
+	for ex_n in [3, 8, 16]:
+		sz = 10 + (ex_n - 3) * 5
+		size_handles.append(ax.scatter([], [], s=sz, marker='o', color='gray', label=f"{ex_n}x{ex_n}"))
+		
+	size_legend = ax.legend(handles=size_handles, title="Grid Scale", loc="upper left", bbox_to_anchor=(1.2, 0.65), fontsize=8, title_fontsize=9)
+	ax.add_artist(size_legend)
+
 	# Plot specific configurations
 	mesh = None
 	flattened_bf = None
 	for x in data:
-		if x["config"] == ["_","_"]:
+		if x["config"] == ["3x3_shared"]:
 			mesh = x
-		elif x["config"] == ["2_3_4_5_6_7_8_9","2_3_4_5_6_7_8_9"]:
+		elif x["config"] == ["4x4_hybrid"]:
 			flattened_bf = x
-	col = cmap((mesh["area"] - min_area) / (max_area - min_area))
-	ax.scatter(mesh["latency"], mesh["throughput"], s=15, marker = "*", zorder=4, color = col)
-	col = cmap((flattened_bf["area"] - min_area) / (max_area - min_area))
-	ax.scatter(flattened_bf["latency"], flattened_bf["throughput"], s=15, marker = "*", zorder=4, color = col)
+	
+	if not mesh and len(data) > 0:
+		mesh = data[0]
+	if not flattened_bf and len(data) > 1:
+		flattened_bf = data[-1]
+
+	best_config = None
+	if data:
+		best_config = max(data, key=lambda x: x["throughput"] / (x["latency"] * x["area"]))
+
+	config_handles = []
+	if mesh:
+		col = cmap(norm(mesh["area"]))
+		h = ax.scatter(mesh["latency"], mesh["throughput"], s=60, marker="*", zorder=6, color=col, edgecolor="black", label="3x3 Shared")
+		config_handles.append(h)
+	if flattened_bf:
+		col = cmap(norm(flattened_bf["area"]))
+		h = ax.scatter(flattened_bf["latency"], flattened_bf["throughput"], s=60, marker="*", zorder=6, color=col, edgecolor="black", label="4x4 Hybrid")
+		config_handles.append(h)
+	if best_config:
+		col = cmap(norm(best_config["area"]))
+		best_raw = best_config.get("config", ["Unknown"])[0]
+		
+		# Parse topology, grid, and architecture
+		parts = best_raw.split("_")
+		grid = next((p for p in parts if 'x' in p), "")
+		try:
+			arch = parts[-1].title()
+			topo = " ".join(parts[:parts.index(grid)]).title() if grid else best_raw.title()
+			best_name = f"{topo} {grid} {arch}".strip()
+		except:
+			best_name = best_raw.title()
+			
+		h = ax.scatter(best_config["latency"], best_config["throughput"], s=100, marker="P", zorder=7, color=col, edgecolor="black", label=f"Best:\n{best_name}")
+		config_handles.append(h)
+		
+	if config_handles:
+		ax.legend(handles=config_handles, bbox_to_anchor=(1.2, 0.3), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
+	
 	# Identify and draw different Pareto-frontiers for different area-overheads
 	for overhead in range(16,-1,-2):
 		area_limit = min_area * (1 + overhead / 100)
@@ -299,20 +397,18 @@ def create_case_study_plot():
 	# Add grid and background
 	ax.set_facecolor("#CCCCCC")
 	ax.grid(which="both", color = "#666666", zorder=0)
-	# Add color bar
-	cbar = plt.colorbar(ax.collections[0], ax=ax)
-	# Axis
+	
+	# Axis labels
 	ax.set_xlabel("Latency [cycles]")
 	ax.set_ylabel("Aggregate Throughput [kbits/cycle]")
-	ax.text(241, 130, r"Total Area [cm$^2$]", ha="center", va="center", rotation=90)
+	
 	# Save the plot	
-	plt.savefig("plots/case_study.pdf")
-
+	plt.savefig("plots/case_study.pdf", bbox_inches="tight")
 if __name__ == "__main__":
 	# Evaluation Plot (Fig 4 in the paper)
-	create_evaluation_plot()
+	# create_evaluation_plot()
 	# Extended Evaluation Plot showing the absolute latency and throughput values and the runtimes (not in the paper)
-	create_extended_evaluation_plot()
+	# create_extended_evaluation_plot()
 	# Case Study Plot (Fig 5 in the paper)
 	create_case_study_plot()
 
