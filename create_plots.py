@@ -19,15 +19,24 @@ def create_latency_vs_load_plot(results_dict, output_name="latency_vs_load"):
 				groups[grid_size] = {}
 			groups[grid_size][arch_name] = results
 			
-	markers = ['o', 's', '^', 'D', 'v', 'p', 'h', '*', '+', 'x']
-	colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+	topo_markers = {
+		"mesh": "o", 
+		"torus": "s", 
+		"folded_torus": "D", 
+		"sid_mesh": "v"
+	}
+	arch_colors = {
+		"shared": '#1f77b4',      # blue
+		"distributed": '#ff7f0e', # orange
+		"hybrid": '#2ca02c'       # green
+	}
 	
 	for grid, arch_dict in groups.items():
 		(fig, ax) = plt.subplots(1, 1, figsize=(7, 5))
 		fig.subplots_adjust(left=0.15, right=0.6, top=0.9, bottom=0.15)
 		
 		valid_curves = 0
-		for i, (name, results) in enumerate(arch_dict.items()):
+		for name, results in arch_dict.items():
 			if "booksim_simulation" not in results:
 				continue
 				
@@ -39,7 +48,20 @@ def create_latency_vs_load_plot(results_dict, output_name="latency_vs_load"):
 			latencies = [results["booksim_simulation"][str(load)]["packet_latency"]["avg"] for load in loads]
 			
 			clean_name = name.replace("oca_", "").replace(f"_{grid}", "").replace("_", " ").title()
-			ax.plot(loads, latencies, marker=markers[i % len(markers)], color=colors[i % len(colors)], label=clean_name, markersize=4, zorder=3)
+			
+			# Map topology and architectures to specific visuals
+			marker = "o"
+			for t_name, m in topo_markers.items():
+				if t_name in name:
+					marker = m
+					break
+			color = "#000000"
+			for a_name, c in arch_colors.items():
+				if a_name in name:
+					color = c
+					break
+					
+			ax.plot(loads, latencies, marker=marker, color=color, label=clean_name, markersize=4, zorder=3)
 			valid_curves += 1
 		
 		if valid_curves > 0:
