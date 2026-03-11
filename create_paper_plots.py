@@ -277,25 +277,18 @@ def create_case_study_plot():
 	vmax_area = areas_sorted[int(len(areas_sorted) * 0.95)]
 	norm = plt.Normalize(vmin=vmin_area, vmax=vmax_area)
 	
-	# Mapping markers to network topologies
-	topo_markers = {
-		"mesh": "o", 
-		"torus": "s", 
-		"folded_torus": "D", 
-		"sid_mesh": "v"
-	}
-	
-	arch_colors = {
-		"shared": '#1f77b4',      # blue
-		"distributed": '#ff7f0e', # orange
-		"hybrid": '#2ca02c'       # green
+	# Mapping markers to architectures instead of topology
+	arch_markers = {
+		"shared": "o", 
+		"distributed": "s", 
+		"hybrid": "D"
 	}
 	
 	import matplotlib.lines as mlines
 	legend_handles = []
 	
-	for topo_name, marker in topo_markers.items():
-		group_data = [x for x in data if x.get("config", [""])[0].startswith(topo_name)]
+	for arch_name, marker in arch_markers.items():
+		group_data = [x for x in data if arch_name in x.get("config", [""])[0]]
 		if not group_data:
 			continue
 			
@@ -303,46 +296,21 @@ def create_case_study_plot():
 		tps = [x["throughput"] for x in group_data]	
 		areas = [x["area"] for x in group_data]
 		
-		# Assign colors based on architecture string match
-		colors = []
-		for x in group_data:
-			cfg_name = x.get("config", [""])[0]
-			c = "grey"
-			for arch, color in arch_colors.items():
-				if arch in cfg_name:
-					c = color
-					break
-			colors.append(c)
-			
-		# Map areas to marker sizes [20, 200]
-		sizes = [20 + ((a - min_area) / (max_area - min_area)) * 180 if max_area > min_area else 30 for a in areas]
+		# Scatter using area for color, fixed size
+		scatter_group = ax.scatter(lats, tps, c=areas, s=45, marker=marker, cmap="RdYlGn_r", vmin=vmin_area, vmax=vmax_area, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
 		
-		# Scatter using size for area
-		scatter_group = ax.scatter(lats, tps, c=colors, s=sizes, marker=marker, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
+		legend_handles.append(mlines.Line2D([], [], color='gray', marker=marker, linestyle='None', markersize=6, label=arch_name.title()))
 		
-		legend_handles.append(mlines.Line2D([], [], color='gray', marker=marker, linestyle='None', markersize=6, label=topo_name.replace("_", " ").title()))
+		scatter = scatter_group
 		
-	# Add the secondary legend describing marker shapes
-	shape_legend = ax.legend(handles=legend_handles, title="Topologies", loc="upper left", bbox_to_anchor=(1.05, 1.0), fontsize=8, title_fontsize=9)
+	# Plot colorbar based on the unified scale
+	cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
+	cbar.set_label('Area (normalized)', fontsize=8)
+	cbar.ax.tick_params(labelsize=7)
+	
+	# Add the architecture legend describing marker shapes
+	shape_legend = ax.legend(handles=legend_handles, title="Architectures", loc="upper left", bbox_to_anchor=(1.25, 1.0), fontsize=8, title_fontsize=9)
 	ax.add_artist(shape_legend)
-	
-	# Add the tertiary legend describing architecture colors
-	arch_handles = []
-	for arch, color in arch_colors.items():
-		arch_handles.append(mlines.Line2D([], [], color=color, marker='o', linestyle='None', markersize=6, label=arch.title()))
-		
-	arch_legend = ax.legend(handles=arch_handles, title="Architectures", loc="upper left", bbox_to_anchor=(1.05, 0.73), fontsize=8, title_fontsize=9)
-	ax.add_artist(arch_legend)
-	
-	# Add the quaternary legend describing area sizes
-	area_handles = []
-	if max_area > min_area:
-		for a in [min_area, (min_area + max_area)/2, max_area]:
-			sz = 20 + ((a - min_area) / (max_area - min_area)) * 180
-			area_handles.append(ax.scatter([], [], s=sz, marker='o', color='gray', label=f"{a:.1f} cm²"))
-			
-		area_legend = ax.legend(handles=area_handles, title="Area", loc="upper left", bbox_to_anchor=(1.05, 0.45), fontsize=8, title_fontsize=9, labelspacing=1.2)
-		ax.add_artist(area_legend)
 
 	best_config = None
 	if data:
@@ -371,7 +339,7 @@ def create_case_study_plot():
 		config_handles.append(h)
 		
 	if config_handles:
-		ax.legend(handles=config_handles, bbox_to_anchor=(1.05, 0.15), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
+		ax.legend(handles=config_handles, bbox_to_anchor=(1.25, 0.6), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
 	
 	# Identify and draw different Pareto-frontiers for different area-overheads
 	for overhead in range(16,-1,-2):
