@@ -301,6 +301,7 @@ def create_case_study_plot():
 			
 		lats = [x["latency"] for x in group_data]
 		tps = [x["throughput"] for x in group_data]	
+		areas = [x["area"] for x in group_data]
 		
 		# Assign colors based on architecture string match
 		colors = []
@@ -312,9 +313,12 @@ def create_case_study_plot():
 					c = color
 					break
 			colors.append(c)
+			
+		# Map areas to marker sizes [20, 200]
+		sizes = [20 + ((a - min_area) / (max_area - min_area)) * 180 if max_area > min_area else 30 for a in areas]
 		
-		# Scatter without area-based colormap
-		scatter_group = ax.scatter(lats, tps, c=colors, s=30, marker=marker, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
+		# Scatter using size for area
+		scatter_group = ax.scatter(lats, tps, c=colors, s=sizes, marker=marker, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
 		
 		legend_handles.append(mlines.Line2D([], [], color='gray', marker=marker, linestyle='None', markersize=6, label=topo_name.replace("_", " ").title()))
 		
@@ -327,8 +331,18 @@ def create_case_study_plot():
 	for arch, color in arch_colors.items():
 		arch_handles.append(mlines.Line2D([], [], color=color, marker='o', linestyle='None', markersize=6, label=arch.title()))
 		
-	arch_legend = ax.legend(handles=arch_handles, title="Architectures", loc="upper left", bbox_to_anchor=(1.05, 0.65), fontsize=8, title_fontsize=9)
+	arch_legend = ax.legend(handles=arch_handles, title="Architectures", loc="upper left", bbox_to_anchor=(1.05, 0.73), fontsize=8, title_fontsize=9)
 	ax.add_artist(arch_legend)
+	
+	# Add the quaternary legend describing area sizes
+	area_handles = []
+	if max_area > min_area:
+		for a in [min_area, (min_area + max_area)/2, max_area]:
+			sz = 20 + ((a - min_area) / (max_area - min_area)) * 180
+			area_handles.append(ax.scatter([], [], s=sz, marker='o', color='gray', label=f"{a:.1f} cm²"))
+			
+		area_legend = ax.legend(handles=area_handles, title="Area", loc="upper left", bbox_to_anchor=(1.05, 0.45), fontsize=8, title_fontsize=9, labelspacing=1.2)
+		ax.add_artist(area_legend)
 
 	best_config = None
 	if data:
@@ -357,7 +371,7 @@ def create_case_study_plot():
 		config_handles.append(h)
 		
 	if config_handles:
-		ax.legend(handles=config_handles, bbox_to_anchor=(1.05, 0.3), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
+		ax.legend(handles=config_handles, bbox_to_anchor=(1.05, 0.15), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
 	
 	# Identify and draw different Pareto-frontiers for different area-overheads
 	for overhead in range(16,-1,-2):
