@@ -305,7 +305,7 @@ def create_case_study_plot():
 		
 	# Plot colorbar based on the unified scale
 	cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
-	cbar.set_label('Area (normalized)', fontsize=8)
+	cbar.set_label('Area (cm²)', fontsize=8)
 	cbar.ax.tick_params(labelsize=7)
 	
 	# Add the architecture legend describing marker shapes
