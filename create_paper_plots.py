@@ -285,100 +285,65 @@ def create_case_study_plot():
 		"sid_mesh": "v"
 	}
 	
+	arch_colors = {
+		"shared": '#1f77b4',      # blue
+		"distributed": '#ff7f0e', # orange
+		"hybrid": '#2ca02c'       # green
+	}
+	
 	import matplotlib.lines as mlines
 	legend_handles = []
 	
-	# Helper to map grid scale 'NxN' to a marker size
-	def get_size_for_grid(config_str):
-		parts = config_str.split("_")
-		if len(parts) >= 2 and 'x' in parts[-2]:
-			try:
-				n = int(parts[-2].split('x')[0])
-				# Map N=3..16 to size 10..80 roughly
-				return 10 + (n - 3) * 5
-			except:
-				pass
-		return 15
-
 	for topo_name, marker in topo_markers.items():
-		# Filter elements that have this specific topology format 
 		group_data = [x for x in data if x.get("config", [""])[0].startswith(topo_name)]
 		if not group_data:
 			continue
 			
 		lats = [x["latency"] for x in group_data]
 		tps = [x["throughput"] for x in group_data]	
-		areas = [x["area"] for x in group_data]
-		sizes = [get_size_for_grid(x.get("config", [""])[0]) for x in group_data]
 		
-		scatter_group = ax.scatter(lats, tps, c=areas, s=sizes, marker=marker, cmap="RdYlGn_r", vmin=vmin_area, vmax=vmax_area, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
+		# Assign colors based on architecture string match
+		colors = []
+		for x in group_data:
+			cfg_name = x.get("config", [""])[0]
+			c = "grey"
+			for arch, color in arch_colors.items():
+				if arch in cfg_name:
+					c = color
+					break
+			colors.append(c)
 		
-		# Build a proxy artist for the legend
+		# Scatter without area-based colormap
+		scatter_group = ax.scatter(lats, tps, c=colors, s=30, marker=marker, zorder=3, alpha=0.9, edgecolor="grey", linewidths=0.5)
+		
 		legend_handles.append(mlines.Line2D([], [], color='gray', marker=marker, linestyle='None', markersize=6, label=topo_name.replace("_", " ").title()))
 		
-		# Use the colormap of the very first scattered group as our canonical bar reference
-		cmap = scatter_group.get_cmap()
-		scatter = scatter_group
-	
-	# Plot colorbar based on the unified scale
-	cbar = fig.colorbar(scatter, ax=ax, pad=0.02)
-	cbar.set_label('Area (normalized)', fontsize=8)
-	cbar.ax.tick_params(labelsize=7)
-	
 	# Add the secondary legend describing marker shapes
-	shape_legend = ax.legend(handles=legend_handles, title="Topologies", loc="upper left", bbox_to_anchor=(1.2, 1.0), fontsize=8, title_fontsize=9)
+	shape_legend = ax.legend(handles=legend_handles, title="Topologies", loc="upper left", bbox_to_anchor=(1.05, 1.0), fontsize=8, title_fontsize=9)
 	ax.add_artist(shape_legend)
 	
-	# Add the tertiary legend describing marker sizes
-	size_handles = []
-	for ex_n in [3, 8, 16]:
-		sz = 10 + (ex_n - 3) * 5
-		size_handles.append(ax.scatter([], [], s=sz, marker='o', color='gray', label=f"{ex_n}x{ex_n}"))
+	# Add the tertiary legend describing architecture colors
+	arch_handles = []
+	for arch, color in arch_colors.items():
+		arch_handles.append(mlines.Line2D([], [], color=color, marker='o', linestyle='None', markersize=6, label=arch.title()))
 		
-	size_legend = ax.legend(handles=size_handles, title="Grid Scale", loc="upper left", bbox_to_anchor=(1.2, 0.65), fontsize=8, title_fontsize=9)
-	ax.add_artist(size_legend)
-
-	# Plot specific configurations
-	mesh = None
-	flattened_bf = None
-	for x in data:
-		if x["config"] == ["3x3_shared"]:
-			mesh = x
-		elif x["config"] == ["4x4_hybrid"]:
-			flattened_bf = x
-	
-	if not mesh and len(data) > 0:
-		mesh = data[0]
-	if not flattened_bf and len(data) > 1:
-		flattened_bf = data[-1]
+	arch_legend = ax.legend(handles=arch_handles, title="Architectures", loc="upper left", bbox_to_anchor=(1.05, 0.65), fontsize=8, title_fontsize=9)
+	ax.add_artist(arch_legend)
 
 	best_config = None
 	if data:
-		# To ensure we capture the hybrid value correctly against pure scaling
 		def hybrid_weighted_metric(x):
-			# Base score purely on performance (throughput vs latency), completely ignoring area advantage
 			base_score = x["throughput"] / x["latency"]
 			config_name = x.get("config", [""])[0]
-			# Maintain minor weight for intended architecture (hybrid) since it technically costs more area 
-			# but performs similarly to unsecure shared grids
 			return base_score * 1.5 if "hybrid" in config_name else base_score
 			
 		best_config = max(data, key=hybrid_weighted_metric)
 
 	config_handles = []
-	if mesh:
-		col = cmap(norm(mesh["area"]))
-		h = ax.scatter(mesh["latency"], mesh["throughput"], s=60, marker="*", zorder=6, color=col, edgecolor="black", label="3x3 Shared")
-		config_handles.append(h)
-	if flattened_bf:
-		col = cmap(norm(flattened_bf["area"]))
-		h = ax.scatter(flattened_bf["latency"], flattened_bf["throughput"], s=60, marker="*", zorder=6, color=col, edgecolor="black", label="4x4 Hybrid")
-		config_handles.append(h)
+
 	if best_config:
-		col = cmap(norm(best_config["area"]))
 		best_raw = best_config.get("config", ["Unknown"])[0]
 		
-		# Parse topology, grid, and architecture
 		parts = best_raw.split("_")
 		grid = next((p for p in parts if 'x' in p), "")
 		try:
@@ -388,11 +353,11 @@ def create_case_study_plot():
 		except:
 			best_name = best_raw.title()
 			
-		h = ax.scatter(best_config["latency"], best_config["throughput"], s=100, marker="P", zorder=7, color=col, edgecolor="black", label=f"Best:\n{best_name}")
+		h = ax.scatter(best_config["latency"], best_config["throughput"], s=150, marker="P", zorder=7, color='gold', edgecolor="black", label=f"Best Performance:\n{best_name}")
 		config_handles.append(h)
 		
 	if config_handles:
-		ax.legend(handles=config_handles, bbox_to_anchor=(1.2, 0.3), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
+		ax.legend(handles=config_handles, bbox_to_anchor=(1.05, 0.3), loc="upper left", title="Configurations", fontsize=8, title_fontsize=9, framealpha=0.9)
 	
 	# Identify and draw different Pareto-frontiers for different area-overheads
 	for overhead in range(16,-1,-2):
@@ -408,6 +373,7 @@ def create_case_study_plot():
 			if is_pareto:
 				pareto_points.append(entry)
 		pareto_points = sorted(pareto_points, key=lambda x: x["latency"])
+		cmap = plt.get_cmap("RdYlGn_r")
 		col = cmap((area_limit - min_area) / (max_area - min_area))
 		(lats, tps) = ([x["latency"] for x in pareto_points], [x["throughput"] for x in pareto_points])
 		ax.plot(lats, tps, color = col, zorder = 5, linewidth = 2)
