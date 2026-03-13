@@ -1,11 +1,11 @@
-# RapidChiplet — AD Security Evaluation
+# RapidChiplet — Chiplet Security Evaluation
 
-Chiplet network architecture evaluation for **autonomous driving (AD) security** use cases, built on top of the [RapidChiplet](https://github.com/spcl/rapidchiplet) simulation framework.
+Chiplet network architecture evaluation for **security** use cases, built on top of the [RapidChiplet](https://github.com/spcl/rapidchiplet) simulation framework.
 
 This repository extends RapidChiplet with:
-- **AD-specific chiplet architectures** (distributed, shared hub, hybrid security models)
-- **Large-scale OCA design-space sweep** across 4 topologies × 8 grid sizes × 3 architectures
-- **Two publication-quality plots** reproduced from pre-computed results in under a minute
+- **Security-focused chiplet architectures** (distributed, shared hub, hybrid security models)
+- **Large-scale design-space sweep** across 4 topologies × 8 grid sizes × 3 architectures
+- **Two publication-quality plots** reproduced from pre-computed results
 
 ---
 
@@ -25,22 +25,22 @@ git fetch upstream
 
 | Plot | Script | Description |
 |------|--------|-------------|
-| `plots/case_study.pdf` | `create_paper_plots.py` | Design-space scatter: latency vs throughput for 96 OCA configurations (3x3 SID-Mesh hybrid wins) |
-| `plots/ad_security_evaluation.pdf` | `plot_ad_comparison.py` | Latency-load curves + area comparison for 4 AD security architectures |
+| `plots/case_study.pdf` | `create_paper_plots.py` | Design-space scatter: latency vs throughput across all configurations (3x3 SID-Mesh hybrid wins) |
+| `plots/ad_security_evaluation.pdf` | `plot_ad_comparison.py` | Latency-load curves + area comparison for 4 security architectures |
 
 ---
 
 ## Quick Start — Regenerate the Plots
 
-Results are pre-computed and included in `results/`. To regenerate the plots immediately:
+Results are pre-computed and included in `results/`. To regenerate the plots:
 
 ```bash
 pip install -r requirements.txt
 
-# Case study scatter plot (reads results/results_oca_*.json)
+# Case study scatter plot
 python3 create_paper_plots.py
 
-# AD security evaluation (reads results/results_ad_*.json)
+# Security architecture evaluation
 python3 plot_ad_comparison.py
 ```
 
@@ -54,11 +54,11 @@ Output PDFs are saved to `plots/`.
 .
 ├── create_paper_plots.py      # Generates plots/case_study.pdf
 ├── plot_ad_comparison.py      # Generates plots/ad_security_evaluation.pdf
-├── run_extensive_sweep.py     # Runs the full OCA sweep (regenerates results/results_oca_*.json)
-├── generate_ad_configs.py     # Generates BookSim config for AD simulations
-├── generate_ad_designs.py     # Generates chiplet placements/topologies for AD architectures
-├── generate_ad_traffic.py     # Generates traffic patterns for AD chiplets
-├── run_ad_simulations.py      # Runs AD simulations (regenerates results/results_ad_*.json)
+├── run_extensive_sweep.py     # Runs the full design-space sweep (regenerates results/results_oca_*.json)
+├── generate_ad_configs.py     # Generates BookSim config for security simulations
+├── generate_ad_designs.py     # Generates chiplet placements/topologies for security architectures
+├── generate_ad_traffic.py     # Generates traffic patterns for security chiplets
+├── run_ad_simulations.py      # Runs security simulations (regenerates results/results_ad_*.json)
 │
 ├── rapidchiplet.py            # Core RapidChiplet simulator (from spcl/rapidchiplet)
 ├── helpers.py                 # JSON I/O and graph utilities
@@ -73,16 +73,16 @@ Output PDFs are saved to `plots/`.
 ├── run_experiment.py          # Automated design space exploration runner
 │
 ├── results/
-│   ├── results_oca_*.json     # Pre-computed OCA sweep results (96 configs × topologies)
-│   └── results_ad_*.json      # Pre-computed AD architecture results (4 variants)
+│   ├── results_oca_*.json     # Pre-computed sweep results (96 configs × topologies)
+│   └── results_ad_*.json      # Pre-computed security architecture results (4 variants)
 │
 ├── plots/
 │   ├── case_study.pdf         # Design-space scatter plot
-│   └── ad_security_evaluation.pdf  # AD latency + area comparison
+│   └── ad_security_evaluation.pdf  # Security latency + area comparison
 │
 ├── inputs/
 │   ├── designs/               # Design spec files (chiplets + placement + topology + routing)
-│   ├── chiplets/              # Chiplet catalog (shared, distributed, hybrid, AD variants)
+│   ├── chiplets/              # Chiplet catalog (shared, distributed, hybrid variants)
 │   ├── technologies/          # Technology node parameters (32nm)
 │   ├── packagings/            # Interposer/packaging configurations
 │   ├── booksim_configs/       # BookSim sweep parameters
@@ -100,9 +100,9 @@ Output PDFs are saved to `plots/`.
 
 ## Reproducing Results from Scratch
 
-### OCA Design-Space Sweep (~1 day runtime)
+### Design-Space Sweep
 
-Regenerates all 96 OCA simulation results used in `case_study.pdf`:
+Regenerates all simulation results used in `case_study.pdf`:
 
 ```bash
 python3 run_extensive_sweep.py
@@ -115,9 +115,9 @@ This sweeps:
 
 Results are saved to `results/results_oca_<topology>_<grid>_<arch>.json`.
 
-### AD Security Simulations (~minutes)
+### Security Architecture Simulations
 
-Regenerates the 4 AD architecture results used in `ad_security_evaluation.pdf`:
+Regenerates the 4 security architecture results used in `ad_security_evaluation.pdf`:
 
 ```bash
 python3 generate_ad_configs.py
@@ -126,7 +126,7 @@ python3 generate_ad_traffic.py
 python3 run_ad_simulations.py
 ```
 
-AD architectures evaluated:
+Architectures evaluated:
 - **Distributed** — each chiplet has its own security module
 - **Shared (1 hub)** — single centralized security hub
 - **Shared (2 hubs)** — two security hubs
@@ -163,15 +163,15 @@ cd ../
 ## Key Results
 
 ### Case Study (`case_study.pdf`)
-Scatter plot of 96 OCA configurations across all topology/grid/architecture combinations.
+Scatter plot across all topology/grid/architecture combinations.
 - X-axis: Latency (cycles)
 - Y-axis: Aggregate Throughput (kbits/cycle)
 - Color: Physical silicon area (cm²)
 - Marker shape: Architecture type (○ shared, □ distributed, ◇ hybrid)
 - **Best configuration: 3×3 SID-Mesh Hybrid** (gold star ✦)
 
-### AD Security Evaluation (`ad_security_evaluation.pdf`)
-Comparison of 4 AD security architectures under increasing injection load.
+### Security Evaluation (`ad_security_evaluation.pdf`)
+Comparison of 4 security architectures under increasing injection load.
 - Left: Average packet latency vs. injection load (network saturation sweep)
 - Right: Total silicon area footprint per architecture
 
