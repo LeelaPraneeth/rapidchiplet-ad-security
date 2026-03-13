@@ -2,3 +2,12 @@
 *
 # Except this file
 !.gitignore
+
+# Allow pre-computed OCA sweep results (case_study.pdf)
+!results_oca_*.json
+
+# Allow pre-computed AD security results (ad_security_evaluation.pdf)
+!results_ad_dist.json
+!results_ad_shared.json
+!results_ad_shared_2hubs.json
+!results_ad_shared_4hubs.json

@@ -2,3 +2,7 @@
 *
 # Except this file
 !.gitignore
+
+# Allow the two main publication plots
+!case_study.pdf
+!ad_security_evaluation.pdf

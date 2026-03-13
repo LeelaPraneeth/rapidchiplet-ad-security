@@ -1,0 +1,24 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Generated intermediate design files (run run_extensive_sweep.py to regenerate)
+design_oca_*.json
+design_4x4_*.json
+design_6x6_*.json
+design_8x8_*.json
+
+# Generated summary CSV
+master_extensive_results.csv
+
+# Compiled BookSim binary
+booksim2/src/booksim
+
+# Netrace binary
+netrace/export_trace
+
+# IDE / OS
+.vscode/
+.idea/
+*.DS_Store

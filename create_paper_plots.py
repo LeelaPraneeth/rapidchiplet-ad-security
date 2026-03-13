@@ -370,6 +370,263 @@ def create_case_study_plot():
 	
 	# Save the plot	
 	plt.savefig("plots/case_study.pdf", bbox_inches="tight")
+def create_design_space_plot():
+	"""
+	Fig. 6-style design space exploration plot.
+
+	  X-axis  : Latency [cycles] from RC analytical model (lower = better)
+	  Y-axis  : Saturation injection rate from BookSim (higher = better)
+	  Color   : Area overhead (%) relative to the minimum area-per-chiplet
+	            configuration (3x3 hybrid = 0 %).
+	  Marker  : Topology (one shape per topology)
+	  Lines   : Latency-throughput Pareto-fronts at key area-overhead budgets,
+	            drawn as staircases and labeled via a legend (not inline text).
+	            Uses weak Pareto dominance so each front reduces to its unique
+	            knee points.
+	  Arrow   : "Better" indicator in the lower-right empty region of the plot.
+	"""
+	import numpy as np
+	import matplotlib.lines as mlines
+
+	# ------------------------------------------------------------------ #
+	# 1. Load data
+	# ------------------------------------------------------------------ #
+	data = []
+	for fname in os.listdir("results"):
+		if not (fname.startswith("results_oca_") and fname.endswith(".json")):
+			continue
+		results = hlp.read_json("results/%s" % fname)
+		config_str = fname.replace("results_oca_", "").replace(".json", "")
+		parts    = config_str.split("_")
+		grid     = parts[-2]
+		arch     = parts[-1]
+		topology = "_".join(parts[:-2])
+		n        = int(grid.split("x")[0])
+
+		lat   = results["latency"]["avg"]
+		loads = [float(k) for k in results["booksim_simulation"] if hlp.is_float(k)]
+		if not loads:
+			continue
+		tp = max(loads)
+
+		area_per_chip = results["area_summary"]["total_chiplet_area"] / (n * n)
+		data.append({
+			"config": config_str, "topology": topology,
+			"grid": grid, "arch": arch, "n": n,
+			"latency": lat, "throughput": tp, "area_per_chip": area_per_chip,
+		})
+
+	if not data:
+		print("No OCA results found for design space plot.")
+		return
+
+	# ------------------------------------------------------------------ #
+	# 2. Area overhead relative to global minimum area-per-chiplet
+	# ------------------------------------------------------------------ #
+	min_apc = min(x["area_per_chip"] for x in data)
+	max_apc = max(x["area_per_chip"] for x in data)
+	for x in data:
+		x["area_overhead"] = (x["area_per_chip"] - min_apc) / min_apc * 100.0
+
+	oh_max = max(x["area_overhead"] for x in data)
+	print("Area overhead range: 0.0%% to %.1f%%" % oh_max)
+
+	# ------------------------------------------------------------------ #
+	# 3. Identify distinct budget thresholds that shift the Pareto front
+	#    (transitions occur at the actual overhead breakpoints in the data)
+	# ------------------------------------------------------------------ #
+	# Unique overhead levels rounded to one decimal
+	unique_oh = sorted(set(round(x["area_overhead"], 1) for x in data))
+	# We pick a small representative set that shows clear front transitions
+	thresholds = [0, 3, 40, 55, 100, int(oh_max)]
+
+	# ------------------------------------------------------------------ #
+	# 4. Helper: weak-domination Pareto filter
+	#    A point is removed if another point is ≤ on lat AND ≥ on tp
+	#    with at least one strict inequality.
+	# ------------------------------------------------------------------ #
+	def weak_pareto(candidates):
+		out = []
+		for e in candidates:
+			dominated = any(
+				o is not e
+				and o["latency"]    <= e["latency"]
+				and o["throughput"] >= e["throughput"]
+				and (o["latency"] < e["latency"] or o["throughput"] > e["throughput"])
+				for o in candidates
+			)
+			if not dominated:
+				out.append(e)
+		# Deduplicate to one representative per (lat, tp) pair
+		seen = set()
+		unique = []
+		for pt in out:
+			key = (round(pt["latency"], 2), round(pt["throughput"], 5))
+			if key not in seen:
+				seen.add(key)
+				unique.append(pt)
+		return sorted(unique, key=lambda x: -x["throughput"])
+
+	# ------------------------------------------------------------------ #
+	# 5. Build Pareto staircase coordinates
+	#    Sort by throughput descending; the staircase envelope answers:
+	#    "Given I accept at most X latency, what is the max throughput?"
+	#    On the plot this traces the reachable upper-left frontier.
+	# ------------------------------------------------------------------ #
+	def pareto_staircase(pts):
+		"""Return (xs, ys) for a staircase drawn through Pareto pts sorted by
+		throughput descending (i.e. left-to-right on the Pareto curve going
+		from high-tp/high-lat down to low-tp/low-lat)."""
+		if not pts:
+			return [], []
+		# Already sorted by -throughput → pts[0] has highest tp
+		xs, ys = [], []
+		for i, pt in enumerate(pts):
+			xs.append(pt["latency"])
+			ys.append(pt["throughput"])
+			if i < len(pts) - 1:
+				# Horizontal step: stay at current throughput, move to next lat
+				xs.append(pts[i + 1]["latency"])
+				ys.append(pt["throughput"])
+		return xs, ys
+
+	# ------------------------------------------------------------------ #
+	# 6. Plot setup
+	# ------------------------------------------------------------------ #
+	fig, ax = plt.subplots(1, 1, figsize=(8.5, 5.2))
+	fig.subplots_adjust(left=0.10, right=0.68, top=0.93, bottom=0.13)
+
+	topology_markers = {
+		"mesh":         "o",
+		"torus":        "s",
+		"folded_torus": "^",
+		"sid_mesh":     "D",
+	}
+	topo_labels = {
+		"mesh":         "Mesh",
+		"torus":        "Torus",
+		"folded_torus": "Folded Torus",
+		"sid_mesh":     "SID Mesh",
+	}
+
+	cmap = plt.get_cmap("RdYlGn_r")
+	norm = plt.Normalize(vmin=0.0, vmax=oh_max)
+
+	# ------------------------------------------------------------------ #
+	# 7. Scatter all points
+	# ------------------------------------------------------------------ #
+	scatter_ref = None
+	for topo, marker in topology_markers.items():
+		grp = [x for x in data if x["topology"] == topo]
+		if not grp:
+			continue
+		sc = ax.scatter(
+			[x["latency"]       for x in grp],
+			[x["throughput"]    for x in grp],
+			c=[x["area_overhead"] for x in grp],
+			s=35, marker=marker,
+			cmap="RdYlGn_r", vmin=0.0, vmax=oh_max,
+			zorder=3, alpha=0.82, edgecolors="grey", linewidths=0.35,
+		)
+		scatter_ref = sc
+
+	# ------------------------------------------------------------------ #
+	# 8. Pareto front staircases — labels go into a legend, not inline
+	# ------------------------------------------------------------------ #
+	pareto_legend_handles = []
+	prev_pareto_set = set()
+
+	for threshold in thresholds:
+		valid = [x for x in data if x["area_overhead"] <= threshold + 0.5]
+		pareto = weak_pareto(valid)
+		if not pareto:
+			continue
+
+		# Skip threshold if it produces an identical front to the previous one
+		pareto_set = frozenset((round(p["latency"], 1), round(p["throughput"], 5))
+		                        for p in pareto)
+		if pareto_set == prev_pareto_set:
+			continue
+		prev_pareto_set = pareto_set
+
+		xs, ys = pareto_staircase(pareto)
+		line_color = cmap(norm(threshold))
+
+		# Draw staircase outline (thin black) then colored line on top
+		ax.plot(xs, ys, color="#333333", zorder=5, linewidth=2.2,
+		        solid_capstyle="round", solid_joinstyle="round")
+		ax.plot(xs, ys, color=line_color, zorder=6, linewidth=1.7,
+		        solid_capstyle="round", solid_joinstyle="round")
+
+		# Collect for legend
+		handle = mlines.Line2D(
+			[], [], color=line_color, linewidth=2,
+			label="≤ %d%% area budget" % threshold,
+		)
+		pareto_legend_handles.append(handle)
+
+	# ------------------------------------------------------------------ #
+	# 9. Colorbar (scatter color = area overhead)
+	# ------------------------------------------------------------------ #
+	if scatter_ref is not None:
+		cbar = fig.colorbar(scatter_ref, ax=ax, pad=0.02)
+		cbar.set_label("Area Overhead vs. Min [%]", fontsize=8)
+		cbar.ax.tick_params(labelsize=7)
+
+	# ------------------------------------------------------------------ #
+	# 10. Topology legend (marker shapes) — upper-right outside axes
+	# ------------------------------------------------------------------ #
+	topo_handles = [
+		mlines.Line2D([], [], color="dimgray", marker=m, linestyle="None",
+		              markersize=6, label=topo_labels.get(t, t.title()))
+		for t, m in topology_markers.items()
+		if any(x["topology"] == t for x in data)
+	]
+	topo_legend = ax.legend(
+		handles=topo_handles, title="Topology",
+		bbox_to_anchor=(1.32, 1.01), loc="upper left",
+		fontsize=8, title_fontsize=9, framealpha=0.92,
+	)
+	ax.add_artist(topo_legend)
+
+	# ------------------------------------------------------------------ #
+	# 11. Pareto-budget legend — below topology legend
+	# ------------------------------------------------------------------ #
+	if pareto_legend_handles:
+		ax.legend(
+			handles=pareto_legend_handles,
+			title="Pareto Fronts",
+			bbox_to_anchor=(1.32, 0.52), loc="upper left",
+			fontsize=7.5, title_fontsize=8.5, framealpha=0.92,
+		)
+
+	# ------------------------------------------------------------------ #
+	# 12. "Better" arrow — axes-fraction coordinates, lower-right region
+	# ------------------------------------------------------------------ #
+	ax.annotate(
+		"Better",
+		xy=(0.12, 0.88), xycoords="axes fraction",
+		xytext=(0.30, 0.72), textcoords="axes fraction",
+		fontsize=8.5, ha="center", va="center",
+		arrowprops=dict(arrowstyle="-|>", color="black", lw=1.6),
+		zorder=7,
+	)
+
+	# ------------------------------------------------------------------ #
+	# 13. Axes formatting
+	# ------------------------------------------------------------------ #
+	ax.set_facecolor("#F5F5F5")
+	ax.grid(True, linestyle="--", alpha=0.55, zorder=0)
+	ax.set_xlabel("Latency [cycles]", fontsize=10)
+	ax.set_ylabel("Saturation Injection Rate", fontsize=10)
+	ax.set_title("Design Space Exploration: OCA Configurations", fontsize=11)
+	ax.set_yscale("log")
+
+	plt.savefig("plots/design_space.pdf", bbox_inches="tight")
+	print(" -> Saved plots/design_space.pdf")
+	plt.close(fig)
+
+
 if __name__ == "__main__":
 	# Evaluation Plot (Fig 4 in the paper)
 	# create_evaluation_plot()
@@ -377,4 +634,6 @@ if __name__ == "__main__":
 	# create_extended_evaluation_plot()
 	# Case Study Plot (Fig 5 in the paper)
 	create_case_study_plot()
+	# Design Space Exploration Plot (Fig 6 style)
+	create_design_space_plot()
 

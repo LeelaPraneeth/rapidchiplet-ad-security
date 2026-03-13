@@ -116,7 +116,7 @@ for n in grid_sizes:
                 "traffic_by_unit": f"inputs/traffic_by_unit/traffic_{n}x{n}_{arch}.json",
                 "traffic_by_chiplet": f"inputs/traffic_by_chiplet/traffic_{n}x{n}_{arch}.json",
                 "trace": "none",
-                "booksim_config": "inputs/booksim_configs/example_booksim_config.json"
+                "booksim_config": "inputs/booksim_configs/bsc_fast.json"
             })
             generated_designs.append(design_name)
 
@@ -158,7 +158,7 @@ for design_file in generated_designs:
     results_path = f"./results/{results_file_name}"
     if os.path.exists(results_path):
         res = hlp.read_json(results_path)
-        if "throughput" in res and "latency" in res:
+        if "throughput" in res and "latency" in res and "booksim_simulation" in res:
             all_simulation_results[arch_name] = res
             continue
 
@@ -189,6 +189,10 @@ for design_file in generated_designs:
 # Plotting (Saturation Curve)
 print(f"\n -> Rendering consolidated network saturation plot to ./plots/...")
 cp.create_latency_vs_load_plot(all_simulation_results)
+
+import create_paper_plots as cpp
+print(f"\n -> Rendering case study scatter plot to ./plots/...")
+cpp.create_case_study_plot()
 
 print("\n==================================================")
 print(" All native evaluations complete! ")

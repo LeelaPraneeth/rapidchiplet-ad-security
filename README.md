@@ -1,183 +1,184 @@
-# RapidChiplet
+# RapidChiplet — AD Security Evaluation
 
-<p align="center">
-  <img src="misc/main_overview.svg">
-</p>
+Chiplet network architecture evaluation for **autonomous driving (AD) security** use cases, built on top of the [RapidChiplet](https://github.com/spcl/rapidchiplet) simulation framework.
 
-## Setup Guide
+This repository extends RapidChiplet with:
+- **AD-specific chiplet architectures** (distributed, shared hub, hybrid security models)
+- **Large-scale OCA design-space sweep** across 4 topologies × 8 grid sizes × 3 architectures
+- **Two publication-quality plots** reproduced from pre-computed results in under a minute
 
-Clone the RapidChiplet repository:
+---
+
+## Dependency
+
+This project is built on top of [RapidChiplet (spcl/rapidchiplet)](https://github.com/spcl/rapidchiplet).
+The core simulation engine (`rapidchiplet.py`), utilities (`helpers.py`, `global_config.py`), and BookSim2 wrapper are sourced from that project. To track upstream changes:
+
 ```bash
-git clone https://github.com/spcl/rapidchiplet.git
+git remote add upstream https://github.com/spcl/rapidchiplet.git
+git fetch upstream
 ```
 
-Install all requirements using pip:
+---
+
+## Plots
+
+| Plot | Script | Description |
+|------|--------|-------------|
+| `plots/case_study.pdf` | `create_paper_plots.py` | Design-space scatter: latency vs throughput for 96 OCA configurations (3x3 SID-Mesh hybrid wins) |
+| `plots/ad_security_evaluation.pdf` | `plot_ad_comparison.py` | Latency-load curves + area comparison for 4 AD security architectures |
+
+---
+
+## Quick Start — Regenerate the Plots
+
+Results are pre-computed and included in `results/`. To regenerate the plots immediately:
+
 ```bash
-cd rc 
+pip install -r requirements.txt
+
+# Case study scatter plot (reads results/results_oca_*.json)
+python3 create_paper_plots.py
+
+# AD security evaluation (reads results/results_ad_*.json)
+python3 plot_ad_comparison.py
+```
+
+Output PDFs are saved to `plots/`.
+
+---
+
+## Repository Structure
+
+```
+.
+├── create_paper_plots.py      # Generates plots/case_study.pdf
+├── plot_ad_comparison.py      # Generates plots/ad_security_evaluation.pdf
+├── run_extensive_sweep.py     # Runs the full OCA sweep (regenerates results/results_oca_*.json)
+├── generate_ad_configs.py     # Generates BookSim config for AD simulations
+├── generate_ad_designs.py     # Generates chiplet placements/topologies for AD architectures
+├── generate_ad_traffic.py     # Generates traffic patterns for AD chiplets
+├── run_ad_simulations.py      # Runs AD simulations (regenerates results/results_ad_*.json)
+│
+├── rapidchiplet.py            # Core RapidChiplet simulator (from spcl/rapidchiplet)
+├── helpers.py                 # JSON I/O and graph utilities
+├── global_config.py           # Color palette definitions
+├── booksim_wrapper.py         # Interface to BookSim2 cycle-accurate simulator
+├── generate_topology.py       # Network topology generators (mesh, torus, etc.)
+├── generate_routing.py        # Routing table generation (SPLIF algorithm)
+├── generate_placement.py      # Chiplet placement generation
+├── generate_traffic.py        # Synthetic traffic pattern generation
+├── validation.py              # Input validation
+├── routing_utils.py           # Routing utilities
+├── run_experiment.py          # Automated design space exploration runner
+│
+├── results/
+│   ├── results_oca_*.json     # Pre-computed OCA sweep results (96 configs × topologies)
+│   └── results_ad_*.json      # Pre-computed AD architecture results (4 variants)
+│
+├── plots/
+│   ├── case_study.pdf         # Design-space scatter plot
+│   └── ad_security_evaluation.pdf  # AD latency + area comparison
+│
+├── inputs/
+│   ├── designs/               # Design spec files (chiplets + placement + topology + routing)
+│   ├── chiplets/              # Chiplet catalog (shared, distributed, hybrid, AD variants)
+│   ├── technologies/          # Technology node parameters (32nm)
+│   ├── packagings/            # Interposer/packaging configurations
+│   ├── booksim_configs/       # BookSim sweep parameters
+│   ├── placements/            # Chiplet placement files
+│   ├── topologies/            # Network topology definitions
+│   ├── routing_tables/        # Pre-generated routing tables
+│   └── traffic_by_chiplet/    # Traffic pattern files
+│
+├── experiments/               # Experiment configuration files
+├── booksim2/                  # BookSim2 submodule (cycle-accurate NoC simulator)
+└── requirements.txt
+```
+
+---
+
+## Reproducing Results from Scratch
+
+### OCA Design-Space Sweep (~1 day runtime)
+
+Regenerates all 96 OCA simulation results used in `case_study.pdf`:
+
+```bash
+python3 run_extensive_sweep.py
+```
+
+This sweeps:
+- **Topologies**: mesh, torus, folded_torus, sid_mesh
+- **Grid sizes**: 3×3, 4×4, 5×5, 6×6, 8×8, 10×10, 12×12, 16×16
+- **Architectures**: shared, distributed, hybrid
+
+Results are saved to `results/results_oca_<topology>_<grid>_<arch>.json`.
+
+### AD Security Simulations (~minutes)
+
+Regenerates the 4 AD architecture results used in `ad_security_evaluation.pdf`:
+
+```bash
+python3 generate_ad_configs.py
+python3 generate_ad_designs.py
+python3 generate_ad_traffic.py
+python3 run_ad_simulations.py
+```
+
+AD architectures evaluated:
+- **Distributed** — each chiplet has its own security module
+- **Shared (1 hub)** — single centralized security hub
+- **Shared (2 hubs)** — two security hubs
+- **Shared (4 hubs)** — four security hubs
+
+---
+
+## Setup
+
+### 1. Install Python dependencies
+
+```bash
 pip install -r requirements.txt
 ```
 
-Build the BookSim2 [1,2] simulator:
+### 2. Build BookSim2
+
 ```bash
 cd booksim2/src
 make
 cd ../../
 ```
 
-Build Netrace [3,4]
+### 3. (Optional) Build Netrace for trace-driven simulation
+
 ```bash
 cd netrace
 gcc export_trace.c netrace.c -o export_trace
 cd ../
 ```
 
-## Reproducing Results from the RapidChiplet Paper
+---
 
-```bash
-python3 reproduce_paper_results.py
-```
-- Note that this script runs for almost one day.
-- The results might slightly differ from the paper due to different system specifications.
-- The plots that appear in the paper in Figure 4 (right), Figure 5, and Figure 6 will be stored in the `./plots/` directory.
-- The chip visualization that appears in the paper in Figure 4 (left) will be stored in the `./images/` directory.
+## Key Results
 
-## RapidChiplet Core
+### Case Study (`case_study.pdf`)
+Scatter plot of 96 OCA configurations across all topology/grid/architecture combinations.
+- X-axis: Latency (cycles)
+- Y-axis: Aggregate Throughput (kbits/cycle)
+- Color: Physical silicon area (cm²)
+- Marker shape: Architecture type (○ shared, □ distributed, ◇ hybrid)
+- **Best configuration: 3×3 SID-Mesh Hybrid** (gold star ✦)
 
-### Inputs
+### AD Security Evaluation (`ad_security_evaluation.pdf`)
+Comparison of 4 AD security architectures under increasing injection load.
+- Left: Average packet latency vs. injection load (network saturation sweep)
+- Right: Total silicon area footprint per architecture
 
-<p align="center">
-  <img src="misc/input_overview.svg" style="width: 100%; height: auto;">
-</p>
-
-
-Configure your chip design using the different input files. Check out the example files in `./inputs/` to get started.
-
-We provide the following input generation scripts for more complex input-files that cannot easily be written by hand:
-
-**generate_routing.py**: Generates a routing table for a given chip design
-
-```bash
-python3 generate_routing.py -df inputs/designs/<design_file> -rtf <routing_table_file> -ra <routing_algorithm>
-```
-- The `<design file>` points to all inputs that the routing table generator needs (chiplets, placement, topology).
-- The `<routing_table_file>` is the name under which the resulting routing table is stored (in `inputs/routing_tables/`).
-- `<routing algorithm>` specifies the routing algorithm to be used. We currently support two routing algorithms:
-  - `splif`: Shortest Path Lowest ID first
-  - `sptmr`: Shortest Path Turn Model Random
-
-**generate_traffic.py**: Generate a synthetic traffic pattern for a given chip design
-
-```bash
-python3 generate_traffic.py -df inputs/designs/<design_file> -tf <traffic_file> -tp <traffic_pattern> -par <parameters>
-```
-- The `<design file>` points to all inputs that the traffic generator needs (chiplets, placement).
-- The `<traffic_file>` is the name under which the resulting traffic pattern is stored (in `/inputs/traffic_by_chiplet/` and `inputs/traffic_by_unit/`).
-- `<traffic_pattern>` specifies the traffic pattern to be generated. We currently support four traffic patterns: `random_uniform`, `transpose`, `permutation`, `hotspot`.
-- `<parameters>` are specific to the selected traffic pattern.
-
-### Executing RapidChiplet
-
-```bash
-python3 rapidchiplet.py -df inputs/designs/<design_file> -rf <results_file> [-as] [-ps] [-ls] [-c] [-l] [-t]
-```
-- The `<design_file>` points to all inputs that are required
-- The `<results_file>` specifies the name, under which the results are stored (in `/results/`).
-- The optional flags are used to enable the computation of different metrics: area summary (`-as`), power summary (`-ps`), link summary (`-ls`), manufacturing cost (`-c`), latency (`-l`), throughput (`-t`).
-
-## Cycle-based Simulations using BookSim
-
-To export a design to BookSim and gather the results, simply run `rapidchiplet.py` with the `-bs` flag:
-
-```bash
-python3 rapidchiplet.py -df inputs/designs/<design_file> -rf <results_file> -bs
-```
-- The `<design_file>` points to all inputs that are required.
-- The `<results_file>` specifies the name, under which the results are stored (in `/results/`).
-
-## Automated Design Space Exploration
-
-### Inputs
-
-Specify parameters and parameter-ranges for your design space exploration in an experiment-file in the `./experiments/` directory. Check out the provided example files to get started.
-
-
-### Running the Automated DSE
-
-```bash
-python3 run_experiment.py -e experiments/<experiment_file>
-```
-
-This script generates one results-file for each combination of input parameters. All result-files are stored in `./results/`.
-
-## Exporting Network Traces using Netrace
-
-### Inputs
-
-Download the traces from the netrace website [5] and store them in `./netrace/traces_in/`.
-
-### Export traces
-
-In a first step, export the traces from the netrace format into an intermediate format:
-
-```bash
-cd netrace
-./export_trace traces_in/<trace_name>.tra.bz2 <trace_region_id> <packet_limit> > traces_out/<trace_name>.json
-cd ../
-```
-
-- Netrace traces contain one or multiple trace regions. Use the `<trace_region_id>` argument to specify the region to export. If you want to export the whole trace, omit this argument.
-- Some Netrace traces are very long. If you only want to export a partial trace region, use the `<packet_limit>` argument to pass the maximum number of packets that should be exported.
-
-In a second step, the trace is parsed into the RapidChiplet format:
-
-```bash
-python3 parse_netrace_trace.py -df inputs/designs/<design_file> -if netrace/traces_out/<trace_name>.json -of <trace_name>.json
-```
-
-- The `<design file>` points to all inputs that the trace parser needs.
-- The arguments `-if` and `-of` refer to the input-trace-file (in the intermediate format) and the output-trace-file (in the output format). The output trace file is stored in `inputs/traces/`.
-
-
-## Visualization of Inputs and Results
-
-### Visualizing Inputs
-
-Visualize a complete design by running
-
-```bash
-python3 visualizer.py -df inputs/designs/<design_name> [-sci] [-spi]
-```
-- You can show chiplet-IDs and PHY-IDs by passing the `-sci` and `-spi` flags respectively.
-
-
-You can also visualize a single chiplet by running
-
-```bash
-python3 visualizer.py -cf inputs/chiplets/<chiplet_file> -cn <chiplet_name>
-```
-
-- `<chiplet_file>` is an input file which potentially specifies multiple chiplets and `<chiplet_name>` is the name of one specific chiplet within this file.
-
-### Visualizing Results
-
-Visualize the results by running:
-
-```bash
-python3 create_plots.py -rf results/<results-file> -pt <plot_type>
-```
-
-- The `<results_file>` contains the results you want to visualize.
-- Currently, only one plot type, namely, `latency_vs_load` is supported, but more will be added soon.
-
+---
 
 ## References
 
-[1] Jiang, N., Becker, D.U., Michelogiannakis, G., Balfour, J., Towles, B., Shaw, D.E., Kim, J. and Dally, W.J., 2013, April. A detailed and flexible cycle-accurate network-on-chip simulator. In 2013 IEEE international symposium on performance analysis of systems and software (ISPASS) (pp. 86-96). IEEE.
-
-[2] https://github.com/booksim/booksim2
-
-[3] Hestness, J., Grot, B. and Keckler, S.W., 2010, December. Netrace: dependency-driven trace-based network-on-chip simulation. In Proceedings of the Third International Workshop on Network on Chip Architectures (pp. 31-36).
-
-[4] https://github.com/booksim/netrace
-
-[5] https://www.cs.utexas.edu/~netrace/
+- RapidChiplet paper and simulator: https://github.com/spcl/rapidchiplet
+- BookSim2 cycle-accurate NoC simulator: https://github.com/booksim/booksim2
+- Netrace trace-driven simulation: https://github.com/booksim/netrace
